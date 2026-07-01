@@ -311,8 +311,8 @@
   <div class="report" id="report"></div>
 
   <p class="foot">
-    Content is matched line by line with a similarity threshold, so minor
-    wording or punctuation differences won't trip a false alarm. Only the
+    Content is matched against the whole page, so text that's present but split
+    across different elements still counts as found. Only the
     <em>published</em> staging page is checked — publish your changes in Framer first.
   </p>
 </div>
@@ -405,6 +405,60 @@ function bestMatch(target, candidates) {
     if (score > best.score) best = { score, text: candidates[i], index: i };
   }
   return best;
+}
+
+// ---- containment matching (robust to how the page splits text) ----
+// Build a single normalized "haystack" of the whole page, plus an index that
+// maps each haystack character back to the site line it came from (for the
+// "extra" check and for reporting a nearby match).
+function buildHaystack(siteUnits) {
+  let text = "";
+  const lineOfChar = []; // lineOfChar[i] = index into siteUnits for haystack char i
+  siteUnits.forEach((unit, li) => {
+    const nu = norm(unit);
+    if (!nu) return;
+    if (text) { text += " "; lineOfChar.push(li); }
+    for (let c = 0; c < nu.length; c++) lineOfChar.push(li);
+    text += nu;
+  });
+  return { text, lineOfChar };
+}
+
+// Find a doc line in the haystack.
+// 1) Exact containment (word-boundary aware) — handles identical-but-resplit text.
+// 2) Fallback: fuzzy sliding window for light rewording.
+// Returns { found, pos, score } where pos is the char offset in the haystack
+// (or -1 if not found), used for order analysis.
+function findInHaystack(docLineNorm, hay) {
+  if (!docLineNorm) return { found: false, pos: -1, score: 0 };
+
+  // Exact contiguous containment, padded with spaces so we match whole words.
+  const padHay = " " + hay.text + " ";
+  const needle = " " + docLineNorm + " ";
+  const idx = padHay.indexOf(needle);
+  if (idx !== -1) return { found: true, pos: idx, score: 1 };
+
+  // Also accept containment without strict word boundaries (covers punctuation
+  // that normalization already stripped but that changed spacing).
+  const looseIdx = hay.text.indexOf(docLineNorm);
+  if (looseIdx !== -1) return { found: true, pos: looseIdx, score: 1 };
+
+  // Fuzzy fallback: slide a window of the doc line's length across the haystack
+  // and take the best similarity. Cheap because we only sample window starts at
+  // word boundaries.
+  const wlen = docLineNorm.length;
+  let best = 0, bestPos = -1;
+  const words = [];
+  let p = 0;
+  // collect word-start offsets
+  hay.text.replace(/\S+/g, (m, off) => { words.push(off); return m; });
+  for (const start of words) {
+    const windowStr = hay.text.substr(start, wlen);
+    const s = similarity(docLineNorm, windowStr);
+    if (s > best) { best = s; bestPos = start; }
+    if (best === 1) break;
+  }
+  return { found: best >= SIMILARITY_THRESHOLD, pos: bestPos, score: best };
 }
 
 // Longest strictly-increasing subsequence of matched page positions.
@@ -635,34 +689,55 @@ els.run.addEventListener("click", async () => {
     const siteUnits = splitIntoUnits(data.text || "");
     setStatus("Comparing content…");
 
-    // Pass 1: doc -> site. Which doc lines are present, and where on the page.
+    const hay = buildHaystack(siteUnits);
+
+    // Pass 1: doc -> site, using full-page containment so differently-split
+    // (but present) content is correctly found.
     const missing = [];
-    const matchedPositions = []; // {docPos, pageIndex} for order analysis
-    const matchedSiteIdx = new Set(); // page lines that matched something in the doc
+    const matchedPositions = []; // {docPos, pageIndex: charOffset} for order analysis
+    const matchedSiteLines = new Set(); // site line indices consumed by a doc match
     let matched = 0;
 
     docUnits.forEach((line, docPos) => {
-      const m = bestMatch(norm(line), siteUnits);
-      if (m.score >= SIMILARITY_THRESHOLD) {
+      const nl = norm(line);
+      const r = findInHaystack(nl, hay);
+      if (r.found) {
         matched++;
-        matchedPositions.push({ docPos, pageIndex: m.index, text: line });
-        matchedSiteIdx.add(m.index);
+        matchedPositions.push({ docPos, pageIndex: r.pos, text: line });
+        // Mark the site lines covered by this match so they're not later
+        // reported as "extra". Use an exclusive end and guard the boundary so a
+        // match ending at a line edge doesn't wrongly absorb the next line.
+        if (r.pos >= 0) {
+          const endChar = Math.min(r.pos + nl.length - 1, hay.lineOfChar.length - 1);
+          for (let c = r.pos; c <= endChar; c++) {
+            const li = hay.lineOfChar[c];
+            if (li !== undefined) matchedSiteLines.add(li);
+          }
+        }
       } else {
-        missing.push({ text: line, near: m.text, score: Math.round(m.score * 100) / 100 });
+        const nearIdx = r.pos >= 0 && hay.lineOfChar[r.pos] !== undefined ? hay.lineOfChar[r.pos] : -1;
+        missing.push({
+          text: line,
+          near: nearIdx >= 0 ? siteUnits[nearIdx] : "",
+          score: Math.round(r.score * 100) / 100,
+        });
       }
     });
 
-    // Order check: of the matched lines, which appear out of sequence on the page.
+    // Order check: of the matched lines, which appear out of sequence (by their
+    // character position on the page).
     const inOrder = longestIncreasingRun(matchedPositions);
     const outOfOrder = matchedPositions.filter((p) => !inOrder.has(p.docPos));
 
-    // Pass 2: site -> doc. Page content not found in the document ("extra").
+    // Pass 2: site -> doc. Page lines not consumed by any doc match, and not
+    // themselves contained in the doc, are "extra".
+    const docHay = buildHaystack(docUnits);
     const extra = [];
     siteUnits.forEach((line, i) => {
-      if (matchedSiteIdx.has(i)) return; // already accounted for
-      const m = bestMatch(norm(line), docUnits);
-      if (m.score < SIMILARITY_THRESHOLD) {
-        extra.push({ text: line, score: Math.round(m.score * 100) / 100 });
+      if (matchedSiteLines.has(i)) return;
+      const r = findInHaystack(norm(line), docHay);
+      if (!r.found) {
+        extra.push({ text: line, score: Math.round(r.score * 100) / 100 });
       }
     });
 
