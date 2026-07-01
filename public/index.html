@@ -194,6 +194,32 @@
   }
   .status.err { color: var(--accent); }
 
+  /* Stepped flow: dim/lock steps until prerequisites are met */
+  .step { transition: opacity 0.25s; }
+  .step.locked { opacity: 0.4; pointer-events: none; }
+  .step-check {
+    display: none; color: var(--pass); margin-left: 0.4rem; font-weight: 700;
+  }
+  .step.done .step-check { display: inline; }
+
+  /* Progress indicator during a check */
+  .progress { margin-top: 1.2rem; }
+  .progress-bar {
+    height: 4px; background: var(--paper-2); border-radius: 2px; overflow: hidden;
+  }
+  .progress-bar span {
+    display: block; height: 100%; width: 0%; background: var(--accent);
+    transition: width 0.4s ease;
+  }
+  .progress-steps {
+    display: flex; justify-content: space-between; margin-top: 0.6rem;
+    font-family: ui-monospace, Menlo, monospace; font-size: 0.72rem; color: var(--line);
+  }
+  .pstep { transition: color 0.2s; }
+  .pstep.active { color: var(--accent); }
+  .pstep.done { color: var(--pass); }
+  .pstep.done::before { content: "✓ "; }
+
   /* Report */
   .report { margin-top: 3rem; }
   .scorecard {
@@ -232,6 +258,82 @@
   }
   .copy-btn:hover { border-color: var(--accent); color: var(--accent); }
 
+  /* --- enhanced report --- */
+  .report-head {
+    display: flex; align-items: baseline; gap: 0.8rem; flex-wrap: wrap;
+    margin: 0 0 1.2rem;
+  }
+  .report-time {
+    font-family: ui-monospace, Menlo, monospace; font-size: 0.75rem; color: var(--muted);
+  }
+  .resolved-tally {
+    margin-left: auto; font-family: ui-monospace, Menlo, monospace;
+    font-size: 0.78rem; color: var(--pass);
+  }
+  .filters { display: flex; gap: 0.4rem; flex-wrap: wrap; margin-bottom: 1.4rem; }
+  .filter-btn {
+    appearance: none; cursor: pointer; background: var(--paper-2);
+    border: 1px solid var(--line); border-radius: 2px; padding: 0.35rem 0.7rem;
+    font-family: ui-monospace, Menlo, monospace; font-size: 0.75rem; color: var(--muted);
+    transition: all 0.15s;
+  }
+  .filter-btn:hover { border-color: var(--ink); color: var(--ink); }
+  .filter-btn.active { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+  .filter-btn .badge {
+    display: inline-block; margin-left: 0.4rem; padding: 0 0.35rem;
+    border-radius: 8px; font-size: 0.7rem; background: var(--paper); color: var(--ink);
+  }
+  .filter-btn.active .badge { background: var(--accent); color: #fff; }
+
+  .section { margin-bottom: 1.6rem; }
+  .section[hidden] { display: none; }
+  .sec-head {
+    display: flex; align-items: center; gap: 0.6rem; cursor: pointer;
+    padding-bottom: 0.5rem; border-bottom: 1px solid var(--line);
+    font-family: ui-monospace, Menlo, monospace; font-size: 0.72rem;
+    letter-spacing: 0.14em; text-transform: uppercase; color: var(--accent);
+    user-select: none;
+  }
+  .sec-head.order { color: #a9791b; }
+  .sec-head.extra { color: #4a6b86; }
+  .sec-head .caret { transition: transform 0.15s; font-size: 0.65rem; }
+  .section.collapsed .caret { transform: rotate(-90deg); }
+  .sec-head .sec-count {
+    margin-left: auto; background: var(--paper-2); color: var(--muted);
+    border-radius: 8px; padding: 0 0.5rem; font-size: 0.7rem; letter-spacing: 0;
+  }
+  .sec-body { transition: opacity 0.15s; }
+  .section.collapsed .sec-body { display: none; }
+
+  .item {
+    display: flex; gap: 0.7rem; padding: 0.9rem 0;
+    border-bottom: 1px solid var(--line); align-items: flex-start;
+  }
+  .item .tick {
+    flex-shrink: 0; width: 20px; height: 20px; margin-top: 0.15rem;
+    border: 1.5px solid var(--line); border-radius: 3px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    color: transparent; font-size: 0.8rem; transition: all 0.12s;
+  }
+  .item .tick:hover { border-color: var(--pass); }
+  .item.resolved .tick { background: var(--pass); border-color: var(--pass); color: #fff; }
+  .item .body { flex: 1; }
+  .item .doc-text { font-size: 1.02rem; }
+  .item .doc-text::before { content: "“"; color: var(--accent); }
+  .item .doc-text::after { content: "”"; color: var(--accent); }
+  .item.resolved .doc-text { text-decoration: line-through; color: var(--muted); opacity: 0.7; }
+  .item .meta {
+    font-family: ui-monospace, Menlo, monospace; font-size: 0.78rem;
+    color: var(--muted); margin-top: 0.45rem;
+  }
+  .item .meta b { color: var(--ink); font-weight: 400; font-style: italic; }
+  .match-pill {
+    display: inline-block; padding: 0.05rem 0.4rem; border-radius: 2px;
+    font-size: 0.7rem; margin-right: 0.4rem;
+  }
+  .match-none { background: var(--accent-soft); color: var(--accent); }
+  .match-weak { background: #f6edda; color: #a9791b; }
+
   .foot {
     margin-top: 4rem; padding-top: 1.5rem; border-top: 1px solid var(--line);
     font-size: 0.82rem; color: var(--muted);
@@ -248,8 +350,8 @@
     <p class="sub">Drop your source document, point it at a staging page, and see exactly which lines didn't make it onto the site.</p>
   </header>
 
-  <div class="field">
-    <label><span class="num">01</span> Source document</label>
+  <div class="field step" id="step-doc">
+    <label><span class="num">01</span> Source document <span class="step-check" aria-hidden="true">✓</span></label>
     <div class="drop" id="drop">
       <span class="icon">📄</span>
       <span class="txt" id="dropTxt">Drop a .docx here, or click to choose
@@ -259,12 +361,12 @@
     <input type="file" id="file" accept=".docx" />
   </div>
 
-  <div class="field">
-    <label><span class="num">02</span> Staging URL</label>
+  <div class="field step" id="step-url">
+    <label><span class="num">02</span> Staging URL <span class="step-check" aria-hidden="true">✓</span></label>
     <input type="url" id="url" placeholder="https://your-site.framer.website/page" />
   </div>
 
-  <div class="field">
+  <div class="field step" id="step-scope">
     <label><span class="num">03</span> Scope <span class="opt">optional</span></label>
 
     <button class="pick-btn" id="pickBtn" disabled>◳ Pick regions visually</button>
@@ -305,8 +407,18 @@
     </div>
   </div>
 
-  <button class="run" id="run" disabled>Check content</button>
-  <div class="status" id="status"></div>
+  <div class="field step" id="step-run">
+    <button class="run" id="run" disabled>Check content</button>
+    <div class="status" id="status"></div>
+    <div class="progress" id="progress" hidden>
+      <div class="progress-bar"><span id="progressFill"></span></div>
+      <div class="progress-steps">
+        <span class="pstep" data-k="load">Loading page</span>
+        <span class="pstep" data-k="extract">Extracting text</span>
+        <span class="pstep" data-k="compare">Comparing</span>
+      </div>
+    </div>
+  </div>
 
   <div class="report" id="report"></div>
 
@@ -512,11 +624,41 @@ const els = {
   run: document.getElementById("run"),
   status: document.getElementById("status"),
   report: document.getElementById("report"),
+  stepDoc: document.getElementById("step-doc"),
+  stepUrl: document.getElementById("step-url"),
+  stepScope: document.getElementById("step-scope"),
+  stepRun: document.getElementById("step-run"),
+  progress: document.getElementById("progress"),
+  progressFill: document.getElementById("progressFill"),
 };
 
+// Toggle a step's locked (dimmed, non-interactive) state.
+function setStepLocked(el, locked) {
+  el.classList.toggle("locked", locked);
+}
+// Toggle a step's done (✓) state.
+function setStepDone(el, done) {
+  el.classList.toggle("done", done);
+}
+
 function refreshRunState() {
-  els.run.disabled = !(docUnits && els.url.value.trim());
-  els.pickBtn.disabled = !els.url.value.trim();
+  const hasDoc = !!docUnits;
+  const hasUrl = !!els.url.value.trim();
+
+  // Step 1 (doc) is done when a doc is loaded.
+  setStepDone(els.stepDoc, hasDoc);
+
+  // Step 2 (URL) unlocks after a doc is loaded; done when a URL is present.
+  setStepLocked(els.stepUrl, !hasDoc);
+  setStepDone(els.stepUrl, hasUrl);
+
+  // Step 3 (scope) unlocks once there's a URL. It's optional, so never "done".
+  setStepLocked(els.stepScope, !(hasDoc && hasUrl));
+  els.pickBtn.disabled = !hasUrl;
+
+  // Step 4 (run) unlocks once doc + URL are ready.
+  setStepLocked(els.stepRun, !(hasDoc && hasUrl));
+  els.run.disabled = !(hasDoc && hasUrl);
 }
 
 // ---- visual region picker ----
@@ -660,6 +802,26 @@ function setStatus(msg, isErr = false) {
   els.status.classList.toggle("err", isErr);
 }
 
+// ---- progress state ----
+const PROGRESS_STEPS = ["load", "extract", "compare"];
+function showProgress(activeKey) {
+  els.progress.hidden = false;
+  const order = PROGRESS_STEPS.indexOf(activeKey);
+  const pct = ((order + 1) / PROGRESS_STEPS.length) * 100;
+  els.progressFill.style.width = pct + "%";
+  els.progress.querySelectorAll(".pstep").forEach((el) => {
+    const k = el.dataset.k;
+    const idx = PROGRESS_STEPS.indexOf(k);
+    el.classList.toggle("active", k === activeKey);
+    el.classList.toggle("done", idx < order);
+  });
+}
+function hideProgress() {
+  els.progress.hidden = true;
+  els.progressFill.style.width = "0%";
+  els.progress.querySelectorAll(".pstep").forEach((el) => el.classList.remove("active", "done"));
+}
+
 // ---- run the check ----
 els.run.addEventListener("click", async () => {
   const url = els.url.value.trim();
@@ -667,7 +829,8 @@ els.run.addEventListener("click", async () => {
 
   els.run.disabled = true;
   els.report.innerHTML = "";
-  setStatus("Loading the staging page… (this can take ~20s)");
+  setStatus("");
+  showProgress("load");
 
   try {
     const params = new URLSearchParams({ url });
@@ -681,13 +844,17 @@ els.run.addEventListener("click", async () => {
     if (!resp.ok) throw new Error(data.error || "Scrape failed");
 
     if (data.warning) {
+      hideProgress();
       els.report.innerHTML = `<div class="warn">${escapeHtml(data.warning)}</div>`;
-      setStatus("");
       return;
     }
 
+    showProgress("extract");
     const siteUnits = splitIntoUnits(data.text || "");
-    setStatus("Comparing content…");
+
+    // Brief tick so the "extracting" state is perceptible before comparing.
+    await new Promise((r) => setTimeout(r, 150));
+    showProgress("compare");
 
     const hay = buildHaystack(siteUnits);
 
@@ -742,17 +909,49 @@ els.run.addEventListener("click", async () => {
     });
 
     renderReport({ missing, matched, total: docUnits.length, outOfOrder, extra });
-    setStatus("");
+    hideProgress();
   } catch (e) {
-    setStatus("Error: " + e.message, true);
+    hideProgress();
+    const friendly = /failed to fetch|networkerror/i.test(e.message)
+      ? "Couldn't reach the page. Check the URL is correct and publicly reachable, then try again."
+      : "Something went wrong: " + e.message;
+    setStatus(friendly, true);
   } finally {
     els.run.disabled = false;
   }
 });
 
+function matchPill(score) {
+  if (score <= 0) return `<span class="match-pill match-none">no match</span>`;
+  if (score < SIMILARITY_THRESHOLD) return `<span class="match-pill match-weak">weak match</span>`;
+  return "";
+}
+
 function renderReport({ missing, matched, total, outOfOrder, extra }) {
   const allClear = missing.length === 0 && outOfOrder.length === 0 && extra.length === 0;
-  const pass = missing.length === 0;
+  const stamp = new Date().toLocaleString([], { hour: "2-digit", minute: "2-digit", month: "short", day: "numeric" });
+
+  const sections = [
+    {
+      key: "missing", cls: "", title: "Missing from the site",
+      hint: "in your doc, not on the page", items: missing,
+      meta: (it) => it.score > 0
+        ? `${matchPill(it.score)}closest on page: <b>“${escapeHtml(it.near || "")}”</b>`
+        : `${matchPill(0)}no similar text found on the page`,
+    },
+    {
+      key: "order", cls: "order", title: "Out of order",
+      hint: "present, but not in the doc's sequence", items: outOfOrder,
+      meta: () => "appears on the page, but out of the top-to-bottom order it has in your document",
+    },
+    {
+      key: "extra", cls: "extra", title: "Extra on the site",
+      hint: "on the page, not in your doc", items: extra,
+      meta: () => "this text is on the page but has no close match in your document",
+    },
+  ];
+
+  const totalFindings = missing.length + outOfOrder.length + extra.length;
 
   let html = `
     <div class="scorecard ${allClear ? "pass" : "fail"}">
@@ -760,51 +959,105 @@ function renderReport({ missing, matched, total, outOfOrder, extra }) {
       <span class="score-label">${allClear
         ? "Every line is present, in order, with no unexpected extra content."
         : summarize(missing.length, outOfOrder.length, extra.length)}</span>
+    </div>
+    <div class="report-head">
+      <span class="report-time">Checked ${stamp}</span>
+      ${totalFindings ? `<span class="resolved-tally" id="tally">0 of ${totalFindings} resolved</span>` : ""}
     </div>`;
 
-  // Section 1: missing from the site
-  if (missing.length) {
-    html += `<p class="missing-title">Missing from the site — in your doc, not on the page</p>`;
-    for (const m of missing) {
-      const near = m.score > 0
-        ? `closest match on page: <b>“${escapeHtml(m.near)}”</b> · similarity ${m.score}`
-        : `no similar text found on the page`;
-      html += `<div class="item"><div class="doc-text">${escapeHtml(m.text)}</div><div class="meta">${near}</div></div>`;
-    }
-  }
-
-  // Section 2: out of order
-  if (outOfOrder.length) {
-    html += `<p class="missing-title order">Out of order — present, but not in the doc's sequence</p>`;
-    for (const o of outOfOrder) {
-      html += `<div class="item"><div class="doc-text">${escapeHtml(o.text)}</div><div class="meta">appears on the page, but out of the top-to-bottom order it has in your document</div></div>`;
-    }
-  }
-
-  // Section 3: extra on the site
-  if (extra.length) {
-    html += `<p class="missing-title extra">Extra on the site — on the page, not in your doc</p>`;
-    for (const e of extra) {
-      html += `<div class="item"><div class="doc-text">${escapeHtml(e.text)}</div><div class="meta">this text is on the page but has no close match in your document</div></div>`;
-    }
-  }
-
   if (!allClear) {
-    html += `<button class="copy-btn" id="copyBtn">Copy full report</button>`;
+    // Filter bar
+    html += `<div class="filters" id="filters">
+      <button class="filter-btn active" data-f="all">All<span class="badge">${totalFindings}</span></button>`;
+    for (const s of sections) {
+      if (s.items.length) {
+        html += `<button class="filter-btn" data-f="${s.key}">${s.title}<span class="badge">${s.items.length}</span></button>`;
+      }
+    }
+    html += `</div>`;
+
+    // Sections
+    for (const s of sections) {
+      if (!s.items.length) continue;
+      html += `<div class="section" data-sec="${s.key}">
+        <div class="sec-head ${s.cls}" data-toggle>
+          <span class="caret">▾</span>
+          <span>${s.title} — ${s.hint}</span>
+          <span class="sec-count">${s.items.length}</span>
+        </div>
+        <div class="sec-body">`;
+      s.items.forEach((it, i) => {
+        html += `<div class="item" data-sec="${s.key}" data-i="${i}">
+          <div class="tick" data-tick title="Mark resolved">✓</div>
+          <div class="body">
+            <div class="doc-text">${escapeHtml(it.text)}</div>
+            <div class="meta">${s.meta(it)}</div>
+          </div>
+        </div>`;
+      });
+      html += `</div></div>`;
+    }
+
+    html += `<button class="copy-btn" id="copyBtn">Copy unresolved findings</button>`;
   }
 
   els.report.innerHTML = html;
+  if (!allClear) wireReport(sections, totalFindings);
+}
 
-  const copyBtn = document.getElementById("copyBtn");
+// Wire up filters, collapse, check-off, tally, and copy for a rendered report.
+function wireReport(sections, totalFindings) {
+  const report = els.report;
+  let resolved = 0;
+  const tally = report.querySelector("#tally");
+
+  // Check-off items
+  report.querySelectorAll(".item").forEach((item) => {
+    const tick = item.querySelector("[data-tick]");
+    tick.addEventListener("click", () => {
+      item.classList.toggle("resolved");
+      resolved = report.querySelectorAll(".item.resolved").length;
+      if (tally) {
+        tally.textContent = `${resolved} of ${totalFindings} resolved`;
+        tally.style.color = resolved === totalFindings ? "var(--pass)" : "";
+      }
+    });
+  });
+
+  // Collapse/expand sections
+  report.querySelectorAll("[data-toggle]").forEach((head) => {
+    head.addEventListener("click", () => head.closest(".section").classList.toggle("collapsed"));
+  });
+
+  // Filter
+  const filterBtns = report.querySelectorAll(".filter-btn");
+  filterBtns.forEach((btn) => {
+    btn.addEventListener("click", () => {
+      filterBtns.forEach((b) => b.classList.remove("active"));
+      btn.classList.add("active");
+      const f = btn.dataset.f;
+      report.querySelectorAll(".section").forEach((sec) => {
+        sec.hidden = !(f === "all" || sec.dataset.sec === f);
+      });
+    });
+  });
+
+  // Copy unresolved
+  const copyBtn = report.querySelector("#copyBtn");
   if (copyBtn) {
     copyBtn.addEventListener("click", () => {
-      const parts = [];
-      if (missing.length) parts.push("MISSING FROM SITE:\n" + missing.map((m) => "• " + m.text).join("\n"));
-      if (outOfOrder.length) parts.push("OUT OF ORDER:\n" + outOfOrder.map((o) => "• " + o.text).join("\n"));
-      if (extra.length) parts.push("EXTRA ON SITE:\n" + extra.map((e) => "• " + e.text).join("\n"));
-      navigator.clipboard.writeText(parts.join("\n\n")).then(() => {
+      const lines = [];
+      report.querySelectorAll(".section").forEach((sec) => {
+        const secItems = Array.from(sec.querySelectorAll(".item")).filter((it) => !it.classList.contains("resolved"));
+        if (!secItems.length) return;
+        const title = sec.querySelector(".sec-head span:nth-child(2)").textContent.split(" — ")[0];
+        lines.push(title.toUpperCase() + ":");
+        secItems.forEach((it) => lines.push("• " + it.querySelector(".doc-text").textContent));
+        lines.push("");
+      });
+      navigator.clipboard.writeText(lines.join("\n").trim()).then(() => {
         copyBtn.textContent = "Copied ✓";
-        setTimeout(() => (copyBtn.textContent = "Copy full report"), 1800);
+        setTimeout(() => (copyBtn.textContent = "Copy unresolved findings"), 1800);
       });
     });
   }
@@ -823,6 +1076,9 @@ function escapeHtml(s) {
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])
   );
 }
+
+// Initialize step-gating on load.
+refreshRunState();
 </script>
 </body>
 </html>
