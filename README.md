@@ -53,23 +53,24 @@ No mapping files, no schedule, no terminal. You open the page and use it.
 
 ### "libnss3.so: cannot open shared object file" / browser won't launch
 
-This means the serverless Chromium couldn't start, and it's almost always the
-**Node runtime version**. `@sparticuz/chromium` needs **Node 20** to correctly
-unpack Chromium's shared libraries. This project pins Node 20 in both
-`package.json` (`engines`) and `vercel.json` (`runtime`), **but Vercel's
-dashboard setting can override those** — so check it directly:
+**This is a Node version problem, full stop.** Vercel now defaults new projects
+to **Node 24**, which `@sparticuz/chromium` is NOT compatible with — so Chromium
+can't load its shared libraries. The pins in `package.json` and `vercel.json`
+are **overridden by the dashboard setting**, so you must change it there:
 
-1. Go to your project on **vercel.com** → **Settings** → **General**.
-2. Find **Node.js Version**. Set it to **20.x**. Save.
-3. Also under **Settings → Functions**, confirm the runtime isn't forced to
-   something else.
-4. Redeploy: delete `node_modules` and `package-lock.json` locally, run
-   `npm install`, then `vercel --prod`.
+1. **vercel.com** → your project → **Settings** → **General**.
+2. Scroll to **Node.js Version**. It is probably set to **24.x**.
+3. Change it to **20.x**. Click **Save**.
+4. Go to the **Deployments** tab → open the most recent deployment → **⋯** menu
+   → **Redeploy**. (The version change only applies to NEW deployments — you
+   MUST redeploy after saving.)
+5. Confirm it worked: open the new deployment's **Build Logs** and check it
+   reports Node **20.x**, not 24.x.
 
-After redeploying, if it still fails, the function now returns a **clear
-message** ("Chromium binary did not resolve…") instead of the cryptic library
-error — which confirms the runtime is still wrong and needs the dashboard change
-above.
+If the tool still errors after this, it now returns a message that says
+exactly this ("set Vercel Node.js Version to 20.x"), which means step 3 or 4
+didn't stick — the version is still 24.x. Re-check the build log's reported
+Node version.
 
 ### Function times out on large pages
 

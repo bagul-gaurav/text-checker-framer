@@ -5,10 +5,13 @@ import puppeteer from "puppeteer-core";
  * Serverless function: given ?url=..., loads the page in headless Chromium
  * and returns the visible rendered text.
  *
- * Runs on Node 20 (pinned in vercel.json + package.json engines), which
- * @sparticuz/chromium v131 requires in order to correctly unpack and resolve
- * Chromium's shared libraries (libnss3.so etc.). A mismatched runtime is the
- * usual cause of "error while loading shared libraries".
+ * IMPORTANT RUNTIME NOTE:
+ * @sparticuz/chromium must run on the Node version its build targets (Node 20
+ * for this pairing). Vercel now DEFAULTS new projects to Node 24, which does
+ * NOT ship compatible libraries and produces:
+ *   "libnss3.so: cannot open shared object file"
+ * Fix: Vercel dashboard -> Settings -> General -> Node.js Version -> 20.x -> Save
+ * -> then redeploy. The dashboard setting overrides package.json/vercel.json.
  */
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -26,13 +29,10 @@ export default async function handler(req, res) {
 
   let browser;
   try {
-    // Resolve the bundled Chromium binary. If this doesn't return a real path,
-    // fail loudly and clearly instead of letting the launch throw the cryptic
-    // shared-library error.
     const executablePath = await chromium.executablePath();
     if (!executablePath) {
       throw new Error(
-        "Chromium binary did not resolve. This usually means the function's Node runtime doesn't match @sparticuz/chromium (needs Node 20). Confirm the deployment is on nodejs20.x."
+        "Chromium binary did not resolve. Set the Vercel Node.js Version to 20.x (Settings -> General) and redeploy."
       );
     }
 
@@ -70,7 +70,11 @@ export default async function handler(req, res) {
 
     res.status(200).json({ text: rawText });
   } catch (err) {
-    res.status(500).json({ error: `Failed to load page: ${err.message}` });
+    // Surface the shared-library error as an actionable message.
+    const hint = /libnss3|shared librar|loading shared/i.test(err.message)
+      ? " — This is the Node runtime mismatch: set Vercel Node.js Version to 20.x in Settings -> General, then redeploy."
+      : "";
+    res.status(500).json({ error: `Failed to load page: ${err.message}${hint}` });
   } finally {
     if (browser) await browser.close();
   }
