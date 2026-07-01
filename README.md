@@ -34,22 +34,26 @@ The report has three sections:
 
 ## Scoping the check (optional)
 
-By default the whole page is checked. Two optional fields let you narrow it:
+By default the whole page is checked. You can narrow it two ways:
 
-- **Include** — only check text inside these containers (e.g. `#MainContent, .article-body`).
-- **Exclude** — remove these before checking (e.g. `nav, footer, .cookie-banner`).
+### Visual region picker (easiest)
+1. Enter the staging URL, then click **Pick regions visually**.
+2. The tool loads a snapshot of the page with clickable boxes over each content
+   region. Click the ones you want to check — everything you don't pick is
+   ignored — then hit **Done**.
+3. Your selection fills the Include field automatically. Run the check as normal.
 
-Both take comma-separated **CSS selectors**. Note: **you can't select Framer
-layers from inside the editor** (Framer has no API for that), but there are two
-easy ways to get a selector:
+Note: the picker selects on a *snapshot* of the page (a live, scrollable embed
+of another site isn't possible due to browser cross-origin security), and it
+uses one extra scrape to build the preview.
 
-1. **Framer layer name.** A frame you named in Framer (e.g. *MainContent*) often
-   appears on the published page as an id/class — try `#MainContent` in Include.
-2. **Inspect the live page.** Right-click the container → Inspect → in dev tools,
-   right-click the element → Copy → Copy selector.
+### Manual selectors
+Under "Or enter selectors manually" you can type CSS selectors directly:
+- **Include** — only check inside these (e.g. `#MainContent, .article-body`).
+- **Exclude** — remove these first (e.g. `nav, footer, .cookie-banner`).
 
-If an Include selector matches nothing, the tool warns you instead of reporting
-everything as missing.
+A frame you named in Framer often appears as `#YourName` or
+`[data-framer-name="YourName"]`.
 
 ## Setup (one time, ~5 minutes, free — no CLI needed)
 

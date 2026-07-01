@@ -104,6 +104,80 @@
     background: #f6edda; font-size: 0.9rem; color: #6b5416;
   }
 
+  .pick-btn {
+    appearance: none; cursor: pointer; width: 100%;
+    background: var(--paper-2); color: var(--ink);
+    border: 1.5px solid var(--ink); border-radius: 2px;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 0.82rem; letter-spacing: 0.06em; padding: 0.85rem;
+    transition: background 0.15s, color 0.15s;
+  }
+  .pick-btn:hover:not(:disabled) { background: var(--ink); color: var(--paper); }
+  .pick-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .pick-hint { font-size: 0.82rem; color: var(--muted); margin: 0.5rem 0 0; }
+
+  .selected { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.8rem; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 0.4rem;
+    background: var(--pass-soft); border: 1px solid var(--pass);
+    color: var(--pass); border-radius: 2px; padding: 0.25rem 0.55rem;
+    font-family: ui-monospace, Menlo, monospace; font-size: 0.76rem;
+  }
+  .chip button {
+    appearance: none; border: none; background: none; cursor: pointer;
+    color: var(--pass); font-size: 0.9rem; line-height: 1; padding: 0;
+  }
+
+  /* Picker modal */
+  .picker {
+    position: fixed; inset: 0; z-index: 50;
+    background: rgba(20,17,13,0.72); display: flex; align-items: stretch;
+    justify-content: center; padding: 2vh 2vw;
+  }
+  .picker[hidden] { display: none; }
+  .picker-inner {
+    background: var(--paper); border-radius: 3px; overflow: hidden;
+    display: flex; flex-direction: column; width: 100%; max-width: 1100px;
+  }
+  .picker-bar {
+    display: flex; align-items: center; gap: 1rem; padding: 0.9rem 1.2rem;
+    border-bottom: 2px solid var(--ink); flex-shrink: 0;
+  }
+  .picker-title {
+    font-family: ui-monospace, Menlo, monospace; font-size: 0.8rem;
+    letter-spacing: 0.08em; text-transform: uppercase;
+  }
+  .picker-count { color: var(--muted); font-size: 0.82rem; margin-left: auto; }
+  .picker-done {
+    appearance: none; cursor: pointer; background: var(--ink); color: var(--paper);
+    border: none; border-radius: 2px; padding: 0.5rem 1.1rem;
+    font-family: ui-monospace, Menlo, monospace; font-size: 0.78rem;
+  }
+  .picker-done:hover { background: var(--accent); }
+  .picker-close {
+    appearance: none; cursor: pointer; background: none; border: none;
+    color: var(--muted); font-size: 1.1rem; padding: 0.2rem 0.4rem;
+  }
+  .picker-stage { position: relative; overflow: auto; background: var(--paper-2); }
+  .picker-stage img { display: block; width: 100%; height: auto; }
+  #pickerOverlays { position: absolute; inset: 0; }
+  .ov {
+    position: absolute; border: 1.5px solid rgba(184,65,46,0.5);
+    background: rgba(184,65,46,0.06); cursor: pointer; box-sizing: border-box;
+    transition: background 0.1s, border-color 0.1s;
+  }
+  .ov:hover { background: rgba(184,65,46,0.16); border-color: var(--accent); }
+  .ov.on {
+    background: rgba(63,107,65,0.22); border: 2px solid var(--pass);
+  }
+  .ov .tag {
+    position: absolute; top: 0; left: 0; transform: translateY(-100%);
+    background: var(--pass); color: #fff; font-family: ui-monospace, Menlo, monospace;
+    font-size: 0.65rem; padding: 0.05rem 0.3rem; white-space: nowrap;
+    opacity: 0; pointer-events: none;
+  }
+  .ov.on .tag { opacity: 1; }
+
   .run {
     appearance: none; border: none; cursor: pointer; width: 100%;
     background: var(--ink); color: var(--paper);
@@ -192,28 +266,43 @@
 
   <div class="field">
     <label><span class="num">03</span> Scope <span class="opt">optional</span></label>
-    <div class="scope-grid">
-      <input type="text" id="include" placeholder="Only check inside… e.g. #MainContent, .article-body" />
-      <input type="text" id="exclude" placeholder="Ignore… e.g. nav, footer, .cookie-banner" />
-    </div>
+
+    <button class="pick-btn" id="pickBtn" disabled>◳ Pick regions visually</button>
+    <p class="pick-hint">Loads a snapshot of the page so you can click the sections to check. Everything you don't pick is ignored. Needs the URL above.</p>
+
+    <div id="selected" class="selected"></div>
+
     <details class="helper">
-      <summary>How do I find these? (and can I use Framer layer names?)</summary>
+      <summary>Or enter selectors manually</summary>
       <div class="helper-body">
-        <p>Both fields take <b>CSS selectors</b>, comma-separated. Leave them
+        <div class="scope-grid">
+          <input type="text" id="include" placeholder="Only check inside… e.g. #MainContent, .article-body" />
+          <input type="text" id="exclude" placeholder="Ignore… e.g. nav, footer, .cookie-banner" />
+        </div>
+        <p>Both fields take <b>CSS selectors</b>, comma-separated. The visual
+           picker above fills in the include field for you. Leave everything
            blank to check the whole page.</p>
-        <p><b>Try your Framer layer name first.</b> When you name a frame in
-           Framer (e.g. <i>MainContent</i>), it often appears on the published
-           page as an id or class. Try typing <code>#MainContent</code> in the
-           include field — if the result looks right, that's all you need.</p>
-        <p><b>If that doesn't work, inspect the page:</b> open your live staging
-           page, right-click the container you care about, choose
-           <i>Inspect</i>, then right-click the highlighted element in the
-           dev-tools panel → <i>Copy → Copy selector</i>. Paste it in.</p>
-        <p><b>Common excludes:</b> <code>nav</code>, <code>footer</code>,
-           <code>header</code> — these skip site-wide chrome that isn't in your
-           document.</p>
+        <p><b>Tip:</b> a frame you named in Framer (e.g. <i>MainContent</i>) often
+           appears on the page as <code>#MainContent</code> or a
+           <code>[data-framer-name="MainContent"]</code> attribute.</p>
       </div>
     </details>
+  </div>
+
+  <!-- Visual picker overlay -->
+  <div id="picker" class="picker" hidden>
+    <div class="picker-inner">
+      <div class="picker-bar">
+        <span class="picker-title">Click the regions to check</span>
+        <span class="picker-count" id="pickerCount">0 selected</span>
+        <button class="picker-done" id="pickerDone">Done</button>
+        <button class="picker-close" id="pickerClose" aria-label="Close">✕</button>
+      </div>
+      <div class="picker-stage" id="pickerStage">
+        <img id="pickerImg" alt="Page preview" />
+        <div id="pickerOverlays"></div>
+      </div>
+    </div>
   </div>
 
   <button class="run" id="run" disabled>Check content</button>
@@ -358,6 +447,14 @@ const els = {
   url: document.getElementById("url"),
   include: document.getElementById("include"),
   exclude: document.getElementById("exclude"),
+  pickBtn: document.getElementById("pickBtn"),
+  selected: document.getElementById("selected"),
+  picker: document.getElementById("picker"),
+  pickerImg: document.getElementById("pickerImg"),
+  pickerOverlays: document.getElementById("pickerOverlays"),
+  pickerCount: document.getElementById("pickerCount"),
+  pickerDone: document.getElementById("pickerDone"),
+  pickerClose: document.getElementById("pickerClose"),
   run: document.getElementById("run"),
   status: document.getElementById("status"),
   report: document.getElementById("report"),
@@ -365,7 +462,113 @@ const els = {
 
 function refreshRunState() {
   els.run.disabled = !(docUnits && els.url.value.trim());
+  els.pickBtn.disabled = !els.url.value.trim();
 }
+
+// ---- visual region picker ----
+let pickerBlocks = [];              // blocks returned from /api/preview
+const selectedSelectors = new Set(); // currently-included selectors
+
+function renderChips() {
+  els.selected.innerHTML = "";
+  selectedSelectors.forEach((sel) => {
+    const chip = document.createElement("span");
+    chip.className = "chip";
+    const label = document.createElement("span");
+    label.textContent = sel.length > 40 ? sel.slice(0, 38) + "…" : sel;
+    const x = document.createElement("button");
+    x.textContent = "✕";
+    x.title = "Remove";
+    x.addEventListener("click", () => {
+      selectedSelectors.delete(sel);
+      syncIncludeField();
+      renderChips();
+    });
+    chip.append(label, x);
+    els.selected.appendChild(chip);
+  });
+}
+
+function syncIncludeField() {
+  els.include.value = Array.from(selectedSelectors).join(", ");
+}
+
+els.pickBtn.addEventListener("click", async () => {
+  const url = els.url.value.trim();
+  if (!url) return;
+  els.pickBtn.disabled = true;
+  setStatus("Building a preview of the page… (this can take ~20s)");
+  try {
+    const resp = await fetch(`/api/preview?url=${encodeURIComponent(url)}`);
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || "Preview failed");
+    if (!data.blocks || !data.blocks.length) {
+      throw new Error("No selectable regions were found on the page.");
+    }
+    openPicker(data);
+    setStatus("");
+  } catch (e) {
+    setStatus("Error: " + e.message, true);
+  } finally {
+    els.pickBtn.disabled = false;
+  }
+});
+
+function openPicker(data) {
+  pickerBlocks = data.blocks;
+  const src = data.screenshot.startsWith("data:")
+    ? data.screenshot
+    : "data:image/png;base64," + data.screenshot;
+  els.pickerImg.src = src;
+
+  // Once the image lays out, we know its rendered width and can scale boxes.
+  els.pickerImg.onload = () => {
+    const scale = els.pickerImg.clientWidth / (data.pageWidth || els.pickerImg.naturalWidth);
+    els.pickerOverlays.innerHTML = "";
+    pickerBlocks.forEach((b, i) => {
+      const ov = document.createElement("div");
+      ov.className = "ov" + (selectedSelectors.has(b.selector) ? " on" : "");
+      ov.style.left = b.x * scale + "px";
+      ov.style.top = b.y * scale + "px";
+      ov.style.width = b.w * scale + "px";
+      ov.style.height = b.h * scale + "px";
+      ov.title = b.name + " · " + b.chars + " chars";
+      const tag = document.createElement("span");
+      tag.className = "tag";
+      tag.textContent = b.name;
+      ov.appendChild(tag);
+      ov.addEventListener("click", (e) => {
+        e.stopPropagation();
+        if (selectedSelectors.has(b.selector)) {
+          selectedSelectors.delete(b.selector);
+          ov.classList.remove("on");
+        } else {
+          selectedSelectors.add(b.selector);
+          ov.classList.add("on");
+        }
+        updatePickerCount();
+      });
+      els.pickerOverlays.appendChild(ov);
+    });
+    updatePickerCount();
+  };
+
+  els.picker.hidden = false;
+}
+
+function updatePickerCount() {
+  const n = selectedSelectors.size;
+  els.pickerCount.textContent = n + " selected";
+}
+
+function closePicker() {
+  els.picker.hidden = true;
+  syncIncludeField();
+  renderChips();
+}
+els.pickerDone.addEventListener("click", closePicker);
+els.pickerClose.addEventListener("click", closePicker);
+els.picker.addEventListener("click", (e) => { if (e.target === els.picker) closePicker(); });
 
 // ---- file handling ----
 async function handleFile(file) {
