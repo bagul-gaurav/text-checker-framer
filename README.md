@@ -32,6 +32,25 @@ The report has three sections:
   they don't get counted as missing content. Edit the `METADATA_LABELS` list at
   the top of the `<script>` in `public/index.html` to add or remove fields.
 
+## Scoping the check (optional)
+
+By default the whole page is checked. Two optional fields let you narrow it:
+
+- **Include** — only check text inside these containers (e.g. `#MainContent, .article-body`).
+- **Exclude** — remove these before checking (e.g. `nav, footer, .cookie-banner`).
+
+Both take comma-separated **CSS selectors**. Note: **you can't select Framer
+layers from inside the editor** (Framer has no API for that), but there are two
+easy ways to get a selector:
+
+1. **Framer layer name.** A frame you named in Framer (e.g. *MainContent*) often
+   appears on the published page as an id/class — try `#MainContent` in Include.
+2. **Inspect the live page.** Right-click the container → Inspect → in dev tools,
+   right-click the element → Copy → Copy selector.
+
+If an Include selector matches nothing, the tool warns you instead of reporting
+everything as missing.
+
 ## Setup (one time, ~5 minutes, free — no CLI needed)
 
 ### 1. Get a free scraping API key

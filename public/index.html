@@ -71,6 +71,39 @@
   }
   input[type="url"]:focus { outline: none; border-color: var(--accent); }
 
+  .opt {
+    font-family: "Iowan Old Style", Georgia, serif; text-transform: none;
+    letter-spacing: 0; font-size: 0.72rem; font-style: italic; color: var(--line);
+    margin-left: 0.4rem;
+  }
+  .scope-grid { display: grid; gap: 0.6rem; }
+  input[type="text"] {
+    width: 100%; padding: 0.75rem 1rem; border: 1.5px solid var(--line);
+    border-radius: 2px; background: var(--paper-2); color: var(--ink);
+    font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.88rem;
+  }
+  input[type="text"]:focus { outline: none; border-color: var(--accent); }
+  input[type="text"]::placeholder { color: var(--muted); opacity: 0.7; }
+
+  .helper { margin-top: 0.7rem; }
+  .helper summary {
+    cursor: pointer; font-family: ui-monospace, Menlo, monospace;
+    font-size: 0.78rem; color: var(--accent); list-style-position: inside;
+  }
+  .helper summary:hover { text-decoration: underline; }
+  .helper-body { padding: 0.8rem 0 0.2rem; font-size: 0.92rem; color: var(--muted); }
+  .helper-body p { margin: 0 0 0.7rem; }
+  .helper-body code {
+    background: var(--paper-2); border: 1px solid var(--line); border-radius: 2px;
+    padding: 0.05rem 0.35rem; font-size: 0.82rem; color: var(--ink);
+  }
+  .helper-body b { color: var(--ink); }
+
+  .warn {
+    margin-top: 1rem; padding: 0.8rem 1rem; border-left: 3px solid #a9791b;
+    background: #f6edda; font-size: 0.9rem; color: #6b5416;
+  }
+
   .run {
     appearance: none; border: none; cursor: pointer; width: 100%;
     background: var(--ink); color: var(--paper);
@@ -155,6 +188,32 @@
   <div class="field">
     <label><span class="num">02</span> Staging URL</label>
     <input type="url" id="url" placeholder="https://your-site.framer.website/page" />
+  </div>
+
+  <div class="field">
+    <label><span class="num">03</span> Scope <span class="opt">optional</span></label>
+    <div class="scope-grid">
+      <input type="text" id="include" placeholder="Only check inside… e.g. #MainContent, .article-body" />
+      <input type="text" id="exclude" placeholder="Ignore… e.g. nav, footer, .cookie-banner" />
+    </div>
+    <details class="helper">
+      <summary>How do I find these? (and can I use Framer layer names?)</summary>
+      <div class="helper-body">
+        <p>Both fields take <b>CSS selectors</b>, comma-separated. Leave them
+           blank to check the whole page.</p>
+        <p><b>Try your Framer layer name first.</b> When you name a frame in
+           Framer (e.g. <i>MainContent</i>), it often appears on the published
+           page as an id or class. Try typing <code>#MainContent</code> in the
+           include field — if the result looks right, that's all you need.</p>
+        <p><b>If that doesn't work, inspect the page:</b> open your live staging
+           page, right-click the container you care about, choose
+           <i>Inspect</i>, then right-click the highlighted element in the
+           dev-tools panel → <i>Copy → Copy selector</i>. Paste it in.</p>
+        <p><b>Common excludes:</b> <code>nav</code>, <code>footer</code>,
+           <code>header</code> — these skip site-wide chrome that isn't in your
+           document.</p>
+      </div>
+    </details>
   </div>
 
   <button class="run" id="run" disabled>Check content</button>
@@ -297,6 +356,8 @@ const els = {
   dropTxt: document.getElementById("dropTxt"),
   file: document.getElementById("file"),
   url: document.getElementById("url"),
+  include: document.getElementById("include"),
+  exclude: document.getElementById("exclude"),
   run: document.getElementById("run"),
   status: document.getElementById("status"),
   report: document.getElementById("report"),
@@ -352,9 +413,21 @@ els.run.addEventListener("click", async () => {
   setStatus("Loading the staging page… (this can take ~20s)");
 
   try {
-    const resp = await fetch(`/api/scrape?url=${encodeURIComponent(url)}`);
+    const params = new URLSearchParams({ url });
+    const inc = els.include.value.trim();
+    const exc = els.exclude.value.trim();
+    if (inc) params.set("include", inc);
+    if (exc) params.set("exclude", exc);
+
+    const resp = await fetch(`/api/scrape?${params.toString()}`);
     const data = await resp.json();
     if (!resp.ok) throw new Error(data.error || "Scrape failed");
+
+    if (data.warning) {
+      els.report.innerHTML = `<div class="warn">${escapeHtml(data.warning)}</div>`;
+      setStatus("");
+      return;
+    }
 
     const siteUnits = splitIntoUnits(data.text || "");
     setStatus("Comparing content…");
