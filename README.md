@@ -51,14 +51,29 @@ No mapping files, no schedule, no terminal. You open the page and use it.
 
 ## Troubleshooting
 
-- **"Failed to fetch" / "libnss3.so: cannot open shared object file" / browser
-  won't launch:** this means the serverless Chromium couldn't start. It's almost
-  always a version mismatch between `puppeteer-core` and `@sparticuz/chromium`.
-  Keep the two on compatible major versions (this project ships a matched pair).
-  After changing dependencies, delete `node_modules` and `package-lock.json`,
-  reinstall, and redeploy with `vercel --prod`.
-- **Function times out on large pages:** raise `maxDuration` in `vercel.json`
-  (Hobby plan allows up to 60s).
+### "libnss3.so: cannot open shared object file" / browser won't launch
+
+This means the serverless Chromium couldn't start, and it's almost always the
+**Node runtime version**. `@sparticuz/chromium` needs **Node 20** to correctly
+unpack Chromium's shared libraries. This project pins Node 20 in both
+`package.json` (`engines`) and `vercel.json` (`runtime`), **but Vercel's
+dashboard setting can override those** — so check it directly:
+
+1. Go to your project on **vercel.com** → **Settings** → **General**.
+2. Find **Node.js Version**. Set it to **20.x**. Save.
+3. Also under **Settings → Functions**, confirm the runtime isn't forced to
+   something else.
+4. Redeploy: delete `node_modules` and `package-lock.json` locally, run
+   `npm install`, then `vercel --prod`.
+
+After redeploying, if it still fails, the function now returns a **clear
+message** ("Chromium binary did not resolve…") instead of the cryptic library
+error — which confirms the runtime is still wrong and needs the dashboard change
+above.
+
+### Function times out on large pages
+
+Raise `maxDuration` in `vercel.json` (Hobby plan allows up to 60s).
 
 ## Notes / limits
 

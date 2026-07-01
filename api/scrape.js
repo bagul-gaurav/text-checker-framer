@@ -3,12 +3,12 @@ import puppeteer from "puppeteer-core";
 
 /**
  * Serverless function: given ?url=..., loads the page in headless Chromium
- * and returns the visible rendered text. Needed because Framer renders
- * content client-side (a plain fetch would miss it) and because browsers
- * block cross-origin scraping from the frontend directly.
+ * and returns the visible rendered text.
  *
- * Uses puppeteer-core + @sparticuz/chromium, the reliable combo for
- * headless Chromium in a Vercel serverless function.
+ * Runs on Node 20 (pinned in vercel.json + package.json engines), which
+ * @sparticuz/chromium v131 requires in order to correctly unpack and resolve
+ * Chromium's shared libraries (libnss3.so etc.). A mismatched runtime is the
+ * usual cause of "error while loading shared libraries".
  */
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -26,10 +26,20 @@ export default async function handler(req, res) {
 
   let browser;
   try {
+    // Resolve the bundled Chromium binary. If this doesn't return a real path,
+    // fail loudly and clearly instead of letting the launch throw the cryptic
+    // shared-library error.
+    const executablePath = await chromium.executablePath();
+    if (!executablePath) {
+      throw new Error(
+        "Chromium binary did not resolve. This usually means the function's Node runtime doesn't match @sparticuz/chromium (needs Node 20). Confirm the deployment is on nodejs20.x."
+      );
+    }
+
     browser = await puppeteer.launch({
       args: chromium.args,
       defaultViewport: { width: 1280, height: 900 },
-      executablePath: await chromium.executablePath(),
+      executablePath,
       headless: true,
     });
 
