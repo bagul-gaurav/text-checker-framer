@@ -1,7 +1,7 @@
 {
   "functions": {
     "api/scrape.js": {
-      "memory": 1024,
+      "memory": 1600,
       "maxDuration": 60
     }
   }

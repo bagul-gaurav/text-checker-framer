@@ -1,14 +1,16 @@
 import chromium from "@sparticuz/chromium";
-import { chromium as playwright } from "playwright-core";
+import puppeteer from "puppeteer-core";
 
 /**
  * Serverless function: given ?url=..., loads the page in headless Chromium
  * and returns the visible rendered text. Needed because Framer renders
  * content client-side (a plain fetch would miss it) and because browsers
  * block cross-origin scraping from the frontend directly.
+ *
+ * Uses puppeteer-core + @sparticuz/chromium, the reliable combo for
+ * headless Chromium in a Vercel serverless function.
  */
 export default async function handler(req, res) {
-  // Basic CORS so the static page can call this
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
   if (req.method === "OPTIONS") {
@@ -24,13 +26,15 @@ export default async function handler(req, res) {
 
   let browser;
   try {
-    browser = await playwright.launch({
+    browser = await puppeteer.launch({
       args: chromium.args,
+      defaultViewport: { width: 1280, height: 900 },
       executablePath: await chromium.executablePath(),
       headless: true,
     });
+
     const page = await browser.newPage();
-    await page.goto(url, { waitUntil: "networkidle", timeout: 30000 });
+    await page.goto(url, { waitUntil: "networkidle2", timeout: 45000 });
 
     const rawText = await page.evaluate(() => {
       function isVisible(el) {

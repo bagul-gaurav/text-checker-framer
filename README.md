@@ -10,7 +10,8 @@ No mapping files, no schedule, no terminal. You open the page and use it.
 
 - The **document** is parsed *in your browser* (via mammoth) — it's never uploaded anywhere.
 - A tiny **serverless function** (`/api/scrape`) loads the staging URL in a headless
-  browser and returns the page's rendered text. This step is required because
+  Chromium (via `puppeteer-core` + `@sparticuz/chromium`) and returns the page's
+  rendered text. This step is required because
   (a) Framer renders content client-side, so a plain fetch would miss it, and
   (b) browsers block a web page from scraping another site directly.
 - The two are compared line by line, using a fuzzy similarity threshold so
@@ -47,6 +48,17 @@ No mapping files, no schedule, no terminal. You open the page and use it.
 - **False positives** (flagging content that's actually there, just reworded):
   lower `SIMILARITY_THRESHOLD` in `public/index.html` (e.g. to `0.6`).
 - **Missing genuinely-absent content**: raise it (e.g. to `0.8`).
+
+## Troubleshooting
+
+- **"Failed to fetch" / "libnss3.so: cannot open shared object file" / browser
+  won't launch:** this means the serverless Chromium couldn't start. It's almost
+  always a version mismatch between `puppeteer-core` and `@sparticuz/chromium`.
+  Keep the two on compatible major versions (this project ships a matched pair).
+  After changing dependencies, delete `node_modules` and `package-lock.json`,
+  reinstall, and redeploy with `vercel --prod`.
+- **Function times out on large pages:** raise `maxDuration` in `vercel.json`
+  (Hobby plan allows up to 60s).
 
 ## Notes / limits
 
