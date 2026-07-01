@@ -1,17 +1,10 @@
-import chromium from "@sparticuz/chromium";
-import puppeteer from "puppeteer-core";
-
 /**
- * Serverless function: given ?url=..., loads the page in headless Chromium
- * and returns the visible rendered text.
+ * Serverless function: given ?url=..., fetches the fully-rendered page text
+ * via ScrapingBee (a hosted headless-browser API). No local Chromium, so none
+ * of the shared-library / Node-version problems that plague self-hosted browsers.
  *
- * IMPORTANT RUNTIME NOTE:
- * @sparticuz/chromium must run on the Node version its build targets (Node 20
- * for this pairing). Vercel now DEFAULTS new projects to Node 24, which does
- * NOT ship compatible libraries and produces:
- *   "libnss3.so: cannot open shared object file"
- * Fix: Vercel dashboard -> Settings -> General -> Node.js Version -> 20.x -> Save
- * -> then redeploy. The dashboard setting overrides package.json/vercel.json.
+ * Requires an environment variable SCRAPINGBEE_API_KEY (set in the Vercel
+ * dashboard -> Settings -> Environment Variables). Free tier at scrapingbee.com.
  */
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -27,55 +20,43 @@ export default async function handler(req, res) {
     return;
   }
 
-  let browser;
+  const apiKey = process.env.SCRAPINGBEE_API_KEY;
+  if (!apiKey) {
+    res.status(500).json({
+      error:
+        "Missing SCRAPINGBEE_API_KEY. Add it in Vercel -> Settings -> Environment Variables, then redeploy.",
+    });
+    return;
+  }
+
   try {
-    const executablePath = await chromium.executablePath();
-    if (!executablePath) {
+    // render_js=true runs a real browser so Framer's client-rendered content
+    // is present. extract_rules pulls just the visible text of <body>.
+    const params = new URLSearchParams({
+      api_key: apiKey,
+      url,
+      render_js: "true",
+      // Wait for network to settle so late-loading content is captured.
+      wait_browser: "networkidle2",
+      // Return only the body's text content, not raw HTML.
+      extract_rules: JSON.stringify({ text: { selector: "body", output: "text" } }),
+    });
+
+    const beeResp = await fetch(`https://app.scrapingbee.com/api/v1/?${params.toString()}`);
+
+    if (!beeResp.ok) {
+      const detail = await beeResp.text().catch(() => "");
       throw new Error(
-        "Chromium binary did not resolve. Set the Vercel Node.js Version to 20.x (Settings -> General) and redeploy."
+        `Scraping service returned ${beeResp.status}. ${detail.slice(0, 200)}`
       );
     }
 
-    browser = await puppeteer.launch({
-      args: chromium.args,
-      defaultViewport: { width: 1280, height: 900 },
-      executablePath,
-      headless: true,
-    });
+    const data = await beeResp.json();
+    // With extract_rules, ScrapingBee returns JSON like { "text": "..." }
+    const text = typeof data === "string" ? data : data.text || "";
 
-    const page = await browser.newPage();
-    await page.goto(url, { waitUntil: "networkidle2", timeout: 45000 });
-
-    const rawText = await page.evaluate(() => {
-      function isVisible(el) {
-        const style = window.getComputedStyle(el);
-        return (
-          style &&
-          style.display !== "none" &&
-          style.visibility !== "hidden" &&
-          el.offsetParent !== null
-        );
-      }
-      const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, null);
-      const chunks = [];
-      let node;
-      while ((node = walker.nextNode())) {
-        const text = node.textContent.trim();
-        if (text && node.parentElement && isVisible(node.parentElement)) {
-          chunks.push(text);
-        }
-      }
-      return chunks.join("\n");
-    });
-
-    res.status(200).json({ text: rawText });
+    res.status(200).json({ text });
   } catch (err) {
-    // Surface the shared-library error as an actionable message.
-    const hint = /libnss3|shared librar|loading shared/i.test(err.message)
-      ? " — This is the Node runtime mismatch: set Vercel Node.js Version to 20.x in Settings -> General, then redeploy."
-      : "";
-    res.status(500).json({ error: `Failed to load page: ${err.message}${hint}` });
-  } finally {
-    if (browser) await browser.close();
+    res.status(500).json({ error: `Failed to load page: ${err.message}` });
   }
 }

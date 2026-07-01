@@ -4,44 +4,45 @@ An on-demand web page: **drop a `.docx`, paste a staging URL, hit Check** — an
 see exactly which lines from your document didn't make it onto the page. Works
 for standalone and CMS pages alike (once published, both are just URLs).
 
-No mapping files, no schedule, no terminal. You open the page and use it.
+No mapping files, no schedule, no terminal.
 
 ## How it works
 
 - The **document** is parsed *in your browser* (via mammoth) — it's never uploaded anywhere.
-- A tiny **serverless function** (`/api/scrape`) loads the staging URL in a headless
-  Chromium (via `puppeteer-core` + `@sparticuz/chromium`) and returns the page's
-  rendered text. This step is required because
-  (a) Framer renders content client-side, so a plain fetch would miss it, and
-  (b) browsers block a web page from scraping another site directly.
+- A tiny **serverless function** (`/api/scrape`) asks a **hosted scraping API
+  (ScrapingBee)** to load the staging URL in a real browser and return the
+  rendered text. Because the browser runs on their infrastructure, there's no
+  Chromium binary to install and none of the Node-version / shared-library
+  problems that come with self-hosting a headless browser.
 - The two are compared line by line, using a fuzzy similarity threshold so
   minor rewording/punctuation differences don't cause false alarms.
 
-## Deploy (one time, ~5 minutes, free)
+## Setup (one time, ~5 minutes, free — no CLI needed)
 
-1. **Install the Vercel CLI** (if you don't have it):
-   ```bash
-   npm i -g vercel
-   ```
-2. **From this folder, deploy:**
-   ```bash
-   vercel
-   ```
-   Accept the defaults. When it finishes, it gives you a URL like
-   `https://framer-qc-tool.vercel.app`. That's your tool — bookmark it.
-3. To push updates later: `vercel --prod`.
+### 1. Get a free scraping API key
+1. Sign up at **https://www.scrapingbee.com** (free tier includes 1,000 credits — plenty for QC).
+2. From your ScrapingBee dashboard, copy your **API key**.
 
-> Prefer no CLI? You can also drag this folder into a new project on
-> [vercel.com](https://vercel.com/new) via a Git repo — Vercel auto-detects the
-> `api/` function and `public/` static page.
+### 2. Deploy to Vercel (drag-and-drop, no terminal)
+1. Unzip this download so you have the `framer-qc-tool` folder.
+2. Go to **https://vercel.com/new**.
+3. Drop the **unzipped folder** into the deploy area (or import it from a GitHub repo).
+4. Let it deploy.
+
+### 3. Add your API key
+1. In Vercel: your project → **Settings** → **Environment Variables**.
+2. Add a variable named exactly **`SCRAPINGBEE_API_KEY`**, paste your key as the value, Save.
+3. Go to **Deployments** → open the latest → **⋯** → **Redeploy** so the key takes effect.
+
+That's it. Open your deployment URL and use the tool.
 
 ## Using it
 
 1. Open your deployed URL.
 2. Drop in the `.docx`.
 3. Paste the staging page URL (the published one — publish in Framer first).
-4. Hit **Check content**. In ~20 seconds you'll get a scorecard and, if
-   anything's missing, the exact lines plus their closest match on the page.
+4. Hit **Check content**. You'll get a scorecard and, if anything's missing,
+   the exact lines plus their closest match on the page.
 
 ## Tuning
 
@@ -51,36 +52,15 @@ No mapping files, no schedule, no terminal. You open the page and use it.
 
 ## Troubleshooting
 
-### "libnss3.so: cannot open shared object file" / browser won't launch
-
-**This is a Node version problem, full stop.** Vercel now defaults new projects
-to **Node 24**, which `@sparticuz/chromium` is NOT compatible with — so Chromium
-can't load its shared libraries. The pins in `package.json` and `vercel.json`
-are **overridden by the dashboard setting**, so you must change it there:
-
-1. **vercel.com** → your project → **Settings** → **General**.
-2. Scroll to **Node.js Version**. It is probably set to **24.x**.
-3. Change it to **20.x**. Click **Save**.
-4. Go to the **Deployments** tab → open the most recent deployment → **⋯** menu
-   → **Redeploy**. (The version change only applies to NEW deployments — you
-   MUST redeploy after saving.)
-5. Confirm it worked: open the new deployment's **Build Logs** and check it
-   reports Node **20.x**, not 24.x.
-
-If the tool still errors after this, it now returns a message that says
-exactly this ("set Vercel Node.js Version to 20.x"), which means step 3 or 4
-didn't stick — the version is still 24.x. Re-check the build log's reported
-Node version.
-
-### Function times out on large pages
-
-Raise `maxDuration` in `vercel.json` (Hobby plan allows up to 60s).
+- **"Missing SCRAPINGBEE_API_KEY":** you haven't added the environment variable,
+  or didn't redeploy after adding it. Do step 3 above, then redeploy.
+- **"Scraping service returned 401":** the API key is wrong or has a typo.
+- **"Scraping service returned 429" or credit errors:** you've used up the free
+  credits for the month.
 
 ## Notes / limits
 
 - Checks the **published** page, not the Framer editor draft.
-- Assumes the staging site is publicly reachable (no password). If you later
-  password-protect it, the scraper would need credentials added — ask and I can
-  extend it.
-- Content that only appears after user interaction (clicking a tab, infinite
-  scroll) may need a tweak to `api/scrape.js` to trigger that first.
+- Assumes the staging site is publicly reachable (no password).
+- Uses ~1 ScrapingBee credit (with JS rendering, a handful) per check — the free
+  tier covers a lot of QC runs.

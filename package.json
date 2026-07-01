@@ -1,13 +1,6 @@
 {
   "name": "framer-qc-tool",
-  "version": "1.3.0",
-  "description": "On-demand web tool: drop a .docx + paste a staging URL, get a report of any doc content missing from the page.",
-  "private": true,
-  "engines": {
-    "node": "20.x"
-  },
-  "dependencies": {
-    "@sparticuz/chromium": "^133.0.0",
-    "puppeteer-core": "^24.1.0"
-  }
+  "version": "2.0.0",
+  "description": "On-demand web tool: drop a .docx + paste a staging URL, get a report of any doc content missing from the page. Uses a hosted scraping API (no self-hosted browser).",
+  "private": true
 }
