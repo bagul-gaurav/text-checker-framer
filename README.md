@@ -17,6 +17,21 @@ No mapping files, no schedule, no terminal.
 - The two are compared line by line, using a fuzzy similarity threshold so
   minor rewording/punctuation differences don't cause false alarms.
 
+The report has three sections:
+1. **Missing from the site** — content in your doc that isn't on the page.
+2. **Out of order** — content that IS on the page but not in the top-to-bottom
+   sequence it has in your document.
+3. **Extra on the site** — content on the page that isn't in your document.
+
+### Doc cleaning (automatic)
+- **Formatting markers are stripped:** a line like `H2: Our Mission` is checked
+  as just `Our Mission`. Handles `H1:`–`H6:` and `Heading 1:`–`Heading 6:`.
+- **Metadata fields are skipped entirely:** lines beginning with `Title:`,
+  `Description:`, `OG tagline:`, `OG description:`, `Keywords:`, `Author:`,
+  `URL:`, `Slug:`, `Tags:`, `Meta title:`, `Meta description:` are ignored, so
+  they don't get counted as missing content. Edit the `METADATA_LABELS` list at
+  the top of the `<script>` in `public/index.html` to add or remove fields.
+
 ## Setup (one time, ~5 minutes, free — no CLI needed)
 
 ### 1. Get a free scraping API key

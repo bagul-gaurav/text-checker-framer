@@ -104,8 +104,11 @@
   .missing-title {
     font-family: ui-monospace, Menlo, monospace; font-size: 0.72rem;
     letter-spacing: 0.14em; text-transform: uppercase; color: var(--accent);
-    margin: 0 0 1rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--line);
+    margin: 2rem 0 1rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--line);
   }
+  .missing-title:first-of-type { margin-top: 0; }
+  .missing-title.order { color: #a9791b; }   /* amber — present but misordered */
+  .missing-title.extra { color: #4a6b86; }   /* blue-grey — unexpected extra */
   .item { padding: 1rem 0; border-bottom: 1px solid var(--line); }
   .item .doc-text { font-size: 1.02rem; }
   .item .doc-text::before { content: "“"; color: var(--accent); }
@@ -169,14 +172,60 @@
 <script>
 const SIMILARITY_THRESHOLD = 0.72;
 
+// Formatting-marker prefixes to strip from doc lines (the heading text is kept).
+// Matches "H1:", "H2 -", "Heading 3:", etc. at the very start of a line.
+const MARKER_PREFIX = /^\s*(?:h[1-6]|heading\s*[1-6])\s*[:\-–]\s*/i;
+
+// Metadata field labels to skip ENTIRELY. A line is dropped if it starts with
+// any of these followed by a colon (e.g. "Title: ...", "OG Description: ...").
+// Edit this list to add/remove fields.
+const METADATA_LABELS = [
+  "title",
+  "description",
+  "meta description",
+  "meta title",
+  "og title",
+  "og tagline",
+  "og tag line",
+  "og description",
+  "keywords",
+  "author",
+  "url",
+  "slug",
+  "tags",
+];
+const METADATA_PREFIX = new RegExp(
+  "^\\s*(?:" + METADATA_LABELS.map((l) => l.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|") + ")\\s*:",
+  "i"
+);
+
 // ---- text utilities ----
 const norm = (s) => s.toLowerCase().replace(/[^a-z0-9\s]/g, "").replace(/\s+/g, " ").trim();
 
+// Generic splitter (used for the scraped SITE text).
 function splitIntoUnits(raw) {
   return raw
     .split(/\n+|(?<=[.!?])\s+(?=[A-Z0-9])/g)
     .map((s) => s.replace(/\s+/g, " ").trim())
     .filter((s) => s.length > 3);
+}
+
+// Doc-specific splitter: like splitIntoUnits, but also strips formatting markers
+// (H2: etc.) and drops metadata lines (Title:, Tags:, ...) entirely.
+function splitDocUnits(raw) {
+  const out = [];
+  for (let line of raw.split(/\n+/)) {
+    line = line.replace(/\s+/g, " ").trim();
+    if (!line) continue;
+    if (METADATA_PREFIX.test(line)) continue;      // skip metadata fields entirely
+    line = line.replace(MARKER_PREFIX, "").trim(); // strip H2:/Heading 3: prefix, keep text
+    if (line.length <= 3) continue;
+    for (const sentence of line.split(/(?<=[.!?])\s+(?=[A-Z0-9])/g)) {
+      const s = sentence.trim();
+      if (s.length > 3) out.push(s);
+    }
+  }
+  return out;
 }
 
 // Dice coefficient on bigrams — same idea as the string-similarity lib
@@ -202,12 +251,43 @@ function similarity(a, b) {
   return (2 * overlap) / total;
 }
 function bestMatch(target, candidates) {
-  let best = { score: 0, text: "" };
-  for (const c of candidates) {
-    const score = similarity(target, norm(c));
-    if (score > best.score) best = { score, text: c };
+  let best = { score: 0, text: "", index: -1 };
+  for (let i = 0; i < candidates.length; i++) {
+    const score = similarity(target, norm(candidates[i]));
+    if (score > best.score) best = { score, text: candidates[i], index: i };
   }
   return best;
+}
+
+// Longest strictly-increasing subsequence of matched page positions.
+// Lines NOT in this subsequence are the ones "out of order".
+function longestIncreasingRun(indices) {
+  // indices: array of {docPos, pageIndex}; returns a Set of docPos that ARE in order.
+  const seq = indices.filter((x) => x.pageIndex >= 0);
+  if (seq.length === 0) return new Set();
+  const tails = [];      // tails[k] = index into seq of smallest tail of an increasing run of length k+1
+  const prev = new Array(seq.length).fill(-1);
+  const tailIdx = [];
+  for (let i = 0; i < seq.length; i++) {
+    const val = seq[i].pageIndex;
+    // binary search for insertion point (strictly increasing)
+    let lo = 0, hi = tailIdx.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (seq[tailIdx[mid]].pageIndex < val) lo = mid + 1;
+      else hi = mid;
+    }
+    if (lo > 0) prev[i] = tailIdx[lo - 1];
+    tailIdx[lo] = i;
+  }
+  // reconstruct
+  const inOrder = new Set();
+  let k = tailIdx[tailIdx.length - 1];
+  while (k !== -1) {
+    inOrder.add(seq[k].docPos);
+    k = prev[k];
+  }
+  return inOrder;
 }
 
 // ---- state ----
@@ -236,9 +316,9 @@ async function handleFile(file) {
   try {
     const buf = await file.arrayBuffer();
     const { value } = await mammoth.extractRawText({ arrayBuffer: buf });
-    docUnits = splitIntoUnits(value);
+    docUnits = splitDocUnits(value);
     els.drop.classList.add("filled");
-    els.dropTxt.innerHTML = `${file.name} <small>${docUnits.length} lines ready to check</small>`;
+    els.dropTxt.innerHTML = `${file.name} <small>${docUnits.length} content lines (markers stripped, metadata skipped)</small>`;
     setStatus("");
     refreshRunState();
   } catch (e) {
@@ -279,15 +359,38 @@ els.run.addEventListener("click", async () => {
     const siteUnits = splitIntoUnits(data.text || "");
     setStatus("Comparing content…");
 
+    // Pass 1: doc -> site. Which doc lines are present, and where on the page.
     const missing = [];
+    const matchedPositions = []; // {docPos, pageIndex} for order analysis
+    const matchedSiteIdx = new Set(); // page lines that matched something in the doc
     let matched = 0;
-    for (const line of docUnits) {
-      const m = bestMatch(norm(line), siteUnits);
-      if (m.score >= SIMILARITY_THRESHOLD) matched++;
-      else missing.push({ text: line, near: m.text, score: Math.round(m.score * 100) / 100 });
-    }
 
-    renderReport(missing, matched, docUnits.length);
+    docUnits.forEach((line, docPos) => {
+      const m = bestMatch(norm(line), siteUnits);
+      if (m.score >= SIMILARITY_THRESHOLD) {
+        matched++;
+        matchedPositions.push({ docPos, pageIndex: m.index, text: line });
+        matchedSiteIdx.add(m.index);
+      } else {
+        missing.push({ text: line, near: m.text, score: Math.round(m.score * 100) / 100 });
+      }
+    });
+
+    // Order check: of the matched lines, which appear out of sequence on the page.
+    const inOrder = longestIncreasingRun(matchedPositions);
+    const outOfOrder = matchedPositions.filter((p) => !inOrder.has(p.docPos));
+
+    // Pass 2: site -> doc. Page content not found in the document ("extra").
+    const extra = [];
+    siteUnits.forEach((line, i) => {
+      if (matchedSiteIdx.has(i)) return; // already accounted for
+      const m = bestMatch(norm(line), docUnits);
+      if (m.score < SIMILARITY_THRESHOLD) {
+        extra.push({ text: line, score: Math.round(m.score * 100) / 100 });
+      }
+    });
+
+    renderReport({ missing, matched, total: docUnits.length, outOfOrder, extra });
     setStatus("");
   } catch (e) {
     setStatus("Error: " + e.message, true);
@@ -296,29 +399,47 @@ els.run.addEventListener("click", async () => {
   }
 });
 
-function renderReport(missing, matched, total) {
+function renderReport({ missing, matched, total, outOfOrder, extra }) {
+  const allClear = missing.length === 0 && outOfOrder.length === 0 && extra.length === 0;
   const pass = missing.length === 0;
+
   let html = `
-    <div class="scorecard ${pass ? "pass" : "fail"}">
+    <div class="scorecard ${allClear ? "pass" : "fail"}">
       <span class="score-big">${matched}/${total}</span>
-      <span class="score-label">${pass
-        ? "Every line from the document was found on the page."
-        : `${missing.length} line${missing.length === 1 ? "" : "s"} not found on the page.`}</span>
+      <span class="score-label">${allClear
+        ? "Every line is present, in order, with no unexpected extra content."
+        : summarize(missing.length, outOfOrder.length, extra.length)}</span>
     </div>`;
 
-  if (!pass) {
-    html += `<p class="missing-title">Missing from the site</p>`;
+  // Section 1: missing from the site
+  if (missing.length) {
+    html += `<p class="missing-title">Missing from the site — in your doc, not on the page</p>`;
     for (const m of missing) {
       const near = m.score > 0
         ? `closest match on page: <b>“${escapeHtml(m.near)}”</b> · similarity ${m.score}`
         : `no similar text found on the page`;
-      html += `
-        <div class="item">
-          <div class="doc-text">${escapeHtml(m.text)}</div>
-          <div class="meta">${near}</div>
-        </div>`;
+      html += `<div class="item"><div class="doc-text">${escapeHtml(m.text)}</div><div class="meta">${near}</div></div>`;
     }
-    html += `<button class="copy-btn" id="copyBtn">Copy missing lines</button>`;
+  }
+
+  // Section 2: out of order
+  if (outOfOrder.length) {
+    html += `<p class="missing-title order">Out of order — present, but not in the doc's sequence</p>`;
+    for (const o of outOfOrder) {
+      html += `<div class="item"><div class="doc-text">${escapeHtml(o.text)}</div><div class="meta">appears on the page, but out of the top-to-bottom order it has in your document</div></div>`;
+    }
+  }
+
+  // Section 3: extra on the site
+  if (extra.length) {
+    html += `<p class="missing-title extra">Extra on the site — on the page, not in your doc</p>`;
+    for (const e of extra) {
+      html += `<div class="item"><div class="doc-text">${escapeHtml(e.text)}</div><div class="meta">this text is on the page but has no close match in your document</div></div>`;
+    }
+  }
+
+  if (!allClear) {
+    html += `<button class="copy-btn" id="copyBtn">Copy full report</button>`;
   }
 
   els.report.innerHTML = html;
@@ -326,13 +447,24 @@ function renderReport(missing, matched, total) {
   const copyBtn = document.getElementById("copyBtn");
   if (copyBtn) {
     copyBtn.addEventListener("click", () => {
-      const txt = missing.map((m) => "• " + m.text).join("\n");
-      navigator.clipboard.writeText(txt).then(() => {
+      const parts = [];
+      if (missing.length) parts.push("MISSING FROM SITE:\n" + missing.map((m) => "• " + m.text).join("\n"));
+      if (outOfOrder.length) parts.push("OUT OF ORDER:\n" + outOfOrder.map((o) => "• " + o.text).join("\n"));
+      if (extra.length) parts.push("EXTRA ON SITE:\n" + extra.map((e) => "• " + e.text).join("\n"));
+      navigator.clipboard.writeText(parts.join("\n\n")).then(() => {
         copyBtn.textContent = "Copied ✓";
-        setTimeout(() => (copyBtn.textContent = "Copy missing lines"), 1800);
+        setTimeout(() => (copyBtn.textContent = "Copy full report"), 1800);
       });
     });
   }
+}
+
+function summarize(m, o, e) {
+  const bits = [];
+  if (m) bits.push(`${m} missing`);
+  if (o) bits.push(`${o} out of order`);
+  if (e) bits.push(`${e} extra on site`);
+  return bits.join(" · ");
 }
 
 function escapeHtml(s) {
