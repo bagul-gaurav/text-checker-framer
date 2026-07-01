@@ -1,0 +1,10 @@
+{
+  "name": "framer-qc-tool",
+  "version": "1.0.0",
+  "description": "On-demand web tool: drop a .docx + paste a staging URL, get a report of any doc content missing from the page.",
+  "private": true,
+  "dependencies": {
+    "@sparticuz/chromium": "^123.0.1",
+    "playwright-core": "^1.46.0"
+  }
+}

@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Content Check — Framer QC</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.7.2/mammoth.browser.min.js"></script>
+<style>
+  :root {
+    --ink: #14110d;
+    --paper: #f0ebe1;
+    --paper-2: #e6dfd1;
+    --line: #cbc2b0;
+    --accent: #b8412e;      /* proofreader's red */
+    --accent-soft: #f3d9d2;
+    --pass: #3f6b41;
+    --pass-soft: #dbe6d9;
+    --muted: #6f685c;
+    --shadow: 0 1px 0 rgba(20,17,13,0.05);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 760px; margin: 0 auto; padding: 4rem 1.5rem 6rem; }
+
+  header { border-bottom: 2px solid var(--ink); padding-bottom: 1.25rem; margin-bottom: 2.5rem; }
+  .eyebrow {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 0.72rem; letter-spacing: 0.18em; text-transform: uppercase;
+    color: var(--accent); margin: 0 0 0.6rem;
+  }
+  h1 {
+    font-size: clamp(2.2rem, 6vw, 3.4rem); line-height: 1.02;
+    font-weight: 600; margin: 0; letter-spacing: -0.02em;
+  }
+  .sub { color: var(--muted); margin: 0.8rem 0 0; max-width: 46ch; }
+
+  .field { margin-bottom: 1.75rem; }
+  label {
+    display: block; font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 0.72rem; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--muted); margin-bottom: 0.55rem;
+  }
+  .num {
+    display: inline-block; color: var(--accent); font-weight: 700;
+    margin-right: 0.5rem;
+  }
+
+  .drop {
+    border: 1.5px dashed var(--line); background: var(--paper-2);
+    border-radius: 2px; padding: 1.6rem 1.4rem; cursor: pointer;
+    transition: border-color 0.15s, background 0.15s; display: flex;
+    align-items: center; gap: 0.9rem;
+  }
+  .drop:hover, .drop.drag { border-color: var(--accent); background: var(--accent-soft); }
+  .drop .icon { font-size: 1.5rem; line-height: 1; }
+  .drop .txt { font-size: 0.98rem; }
+  .drop .txt small { display: block; color: var(--muted); font-size: 0.82rem; margin-top: 0.15rem; }
+  .drop.filled { border-style: solid; border-color: var(--pass); background: var(--pass-soft); }
+
+  input[type="url"] {
+    width: 100%; padding: 0.85rem 1rem; border: 1.5px solid var(--line);
+    border-radius: 2px; background: var(--paper-2); color: var(--ink);
+    font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.95rem;
+  }
+  input[type="url"]:focus { outline: none; border-color: var(--accent); }
+
+  .run {
+    appearance: none; border: none; cursor: pointer; width: 100%;
+    background: var(--ink); color: var(--paper);
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 0.85rem; letter-spacing: 0.14em; text-transform: uppercase;
+    padding: 1.05rem; border-radius: 2px; transition: background 0.15s;
+  }
+  .run:hover:not(:disabled) { background: var(--accent); }
+  .run:disabled { opacity: 0.45; cursor: not-allowed; }
+
+  .status {
+    margin-top: 1.4rem; font-family: ui-monospace, Menlo, monospace;
+    font-size: 0.85rem; color: var(--muted); min-height: 1.2em;
+  }
+  .status.err { color: var(--accent); }
+
+  /* Report */
+  .report { margin-top: 3rem; }
+  .scorecard {
+    border: 2px solid var(--ink); border-radius: 2px; padding: 1.4rem 1.5rem;
+    display: flex; align-items: baseline; gap: 1rem; margin-bottom: 2rem;
+    box-shadow: var(--shadow);
+  }
+  .scorecard.pass { border-color: var(--pass); }
+  .scorecard.fail { border-color: var(--accent); }
+  .score-big { font-size: 2.6rem; font-weight: 600; line-height: 1; }
+  .pass .score-big { color: var(--pass); }
+  .fail .score-big { color: var(--accent); }
+  .score-label { color: var(--muted); font-size: 0.95rem; }
+
+  .missing-title {
+    font-family: ui-monospace, Menlo, monospace; font-size: 0.72rem;
+    letter-spacing: 0.14em; text-transform: uppercase; color: var(--accent);
+    margin: 0 0 1rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--line);
+  }
+  .item { padding: 1rem 0; border-bottom: 1px solid var(--line); }
+  .item .doc-text { font-size: 1.02rem; }
+  .item .doc-text::before { content: "“"; color: var(--accent); }
+  .item .doc-text::after { content: "”"; color: var(--accent); }
+  .item .meta {
+    font-family: ui-monospace, Menlo, monospace; font-size: 0.78rem;
+    color: var(--muted); margin-top: 0.45rem;
+  }
+  .item .meta b { color: var(--ink); font-weight: 400; font-style: italic; }
+  .copy-btn {
+    margin-top: 1.5rem; background: none; border: 1px solid var(--line);
+    color: var(--muted); font-family: ui-monospace, Menlo, monospace;
+    font-size: 0.78rem; padding: 0.6rem 1rem; border-radius: 2px; cursor: pointer;
+  }
+  .copy-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+  .foot {
+    margin-top: 4rem; padding-top: 1.5rem; border-top: 1px solid var(--line);
+    font-size: 0.82rem; color: var(--muted);
+  }
+  input[type="file"] { display: none; }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <p class="eyebrow">Framer · Content QC</p>
+    <h1>Did every word make it?</h1>
+    <p class="sub">Drop your source document, point it at a staging page, and see exactly which lines didn't make it onto the site.</p>
+  </header>
+
+  <div class="field">
+    <label><span class="num">01</span> Source document</label>
+    <div class="drop" id="drop">
+      <span class="icon">📄</span>
+      <span class="txt" id="dropTxt">Drop a .docx here, or click to choose
+        <small>Parsed in your browser — nothing is uploaded.</small>
+      </span>
+    </div>
+    <input type="file" id="file" accept=".docx" />
+  </div>
+
+  <div class="field">
+    <label><span class="num">02</span> Staging URL</label>
+    <input type="url" id="url" placeholder="https://your-site.framer.website/page" />
+  </div>
+
+  <button class="run" id="run" disabled>Check content</button>
+  <div class="status" id="status"></div>
+
+  <div class="report" id="report"></div>
+
+  <p class="foot">
+    Content is matched line by line with a similarity threshold, so minor
+    wording or punctuation differences won't trip a false alarm. Only the
+    <em>published</em> staging page is checked — publish your changes in Framer first.
+  </p>
+</div>
+
+<script>
+const SIMILARITY_THRESHOLD = 0.72;
+
+// ---- text utilities ----
+const norm = (s) => s.toLowerCase().replace(/[^a-z0-9\s]/g, "").replace(/\s+/g, " ").trim();
+
+function splitIntoUnits(raw) {
+  return raw
+    .split(/\n+|(?<=[.!?])\s+(?=[A-Z0-9])/g)
+    .map((s) => s.replace(/\s+/g, " ").trim())
+    .filter((s) => s.length > 3);
+}
+
+// Dice coefficient on bigrams — same idea as the string-similarity lib
+function bigrams(str) {
+  const s = str.replace(/\s+/g, " ");
+  const out = new Map();
+  for (let i = 0; i < s.length - 1; i++) {
+    const bg = s.substr(i, 2);
+    out.set(bg, (out.get(bg) || 0) + 1);
+  }
+  return out;
+}
+function similarity(a, b) {
+  if (a === b) return 1;
+  if (a.length < 2 || b.length < 2) return 0;
+  const A = bigrams(a), B = bigrams(b);
+  let overlap = 0, total = 0;
+  for (const c of A.values()) total += c;
+  for (const c of B.values()) total += c;
+  for (const [bg, count] of A) {
+    if (B.has(bg)) overlap += Math.min(count, B.get(bg));
+  }
+  return (2 * overlap) / total;
+}
+function bestMatch(target, candidates) {
+  let best = { score: 0, text: "" };
+  for (const c of candidates) {
+    const score = similarity(target, norm(c));
+    if (score > best.score) best = { score, text: c };
+  }
+  return best;
+}
+
+// ---- state ----
+let docUnits = null;
+const els = {
+  drop: document.getElementById("drop"),
+  dropTxt: document.getElementById("dropTxt"),
+  file: document.getElementById("file"),
+  url: document.getElementById("url"),
+  run: document.getElementById("run"),
+  status: document.getElementById("status"),
+  report: document.getElementById("report"),
+};
+
+function refreshRunState() {
+  els.run.disabled = !(docUnits && els.url.value.trim());
+}
+
+// ---- file handling ----
+async function handleFile(file) {
+  if (!file || !file.name.endsWith(".docx")) {
+    setStatus("Please choose a .docx file.", true);
+    return;
+  }
+  setStatus("Reading document…");
+  try {
+    const buf = await file.arrayBuffer();
+    const { value } = await mammoth.extractRawText({ arrayBuffer: buf });
+    docUnits = splitIntoUnits(value);
+    els.drop.classList.add("filled");
+    els.dropTxt.innerHTML = `${file.name} <small>${docUnits.length} lines ready to check</small>`;
+    setStatus("");
+    refreshRunState();
+  } catch (e) {
+    setStatus("Couldn't read that document: " + e.message, true);
+  }
+}
+
+els.drop.addEventListener("click", () => els.file.click());
+els.file.addEventListener("change", (e) => handleFile(e.target.files[0]));
+["dragover", "dragenter"].forEach((ev) =>
+  els.drop.addEventListener(ev, (e) => { e.preventDefault(); els.drop.classList.add("drag"); })
+);
+["dragleave", "drop"].forEach((ev) =>
+  els.drop.addEventListener(ev, (e) => { e.preventDefault(); els.drop.classList.remove("drag"); })
+);
+els.drop.addEventListener("drop", (e) => handleFile(e.dataTransfer.files[0]));
+els.url.addEventListener("input", refreshRunState);
+
+function setStatus(msg, isErr = false) {
+  els.status.textContent = msg;
+  els.status.classList.toggle("err", isErr);
+}
+
+// ---- run the check ----
+els.run.addEventListener("click", async () => {
+  const url = els.url.value.trim();
+  if (!docUnits || !url) return;
+
+  els.run.disabled = true;
+  els.report.innerHTML = "";
+  setStatus("Loading the staging page… (this can take ~20s)");
+
+  try {
+    const resp = await fetch(`/api/scrape?url=${encodeURIComponent(url)}`);
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || "Scrape failed");
+
+    const siteUnits = splitIntoUnits(data.text || "");
+    setStatus("Comparing content…");
+
+    const missing = [];
+    let matched = 0;
+    for (const line of docUnits) {
+      const m = bestMatch(norm(line), siteUnits);
+      if (m.score >= SIMILARITY_THRESHOLD) matched++;
+      else missing.push({ text: line, near: m.text, score: Math.round(m.score * 100) / 100 });
+    }
+
+    renderReport(missing, matched, docUnits.length);
+    setStatus("");
+  } catch (e) {
+    setStatus("Error: " + e.message, true);
+  } finally {
+    els.run.disabled = false;
+  }
+});
+
+function renderReport(missing, matched, total) {
+  const pass = missing.length === 0;
+  let html = `
+    <div class="scorecard ${pass ? "pass" : "fail"}">
+      <span class="score-big">${matched}/${total}</span>
+      <span class="score-label">${pass
+        ? "Every line from the document was found on the page."
+        : `${missing.length} line${missing.length === 1 ? "" : "s"} not found on the page.`}</span>
+    </div>`;
+
+  if (!pass) {
+    html += `<p class="missing-title">Missing from the site</p>`;
+    for (const m of missing) {
+      const near = m.score > 0
+        ? `closest match on page: <b>“${escapeHtml(m.near)}”</b> · similarity ${m.score}`
+        : `no similar text found on the page`;
+      html += `
+        <div class="item">
+          <div class="doc-text">${escapeHtml(m.text)}</div>
+          <div class="meta">${near}</div>
+        </div>`;
+    }
+    html += `<button class="copy-btn" id="copyBtn">Copy missing lines</button>`;
+  }
+
+  els.report.innerHTML = html;
+
+  const copyBtn = document.getElementById("copyBtn");
+  if (copyBtn) {
+    copyBtn.addEventListener("click", () => {
+      const txt = missing.map((m) => "• " + m.text).join("\n");
+      navigator.clipboard.writeText(txt).then(() => {
+        copyBtn.textContent = "Copied ✓";
+        setTimeout(() => (copyBtn.textContent = "Copy missing lines"), 1800);
+      });
+    });
+  }
+}
+
+function escapeHtml(s) {
+  return s.replace(/[&<>"']/g, (c) =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])
+  );
+}
+</script>
+</body>
+</html>
